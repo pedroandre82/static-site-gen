@@ -1,5 +1,6 @@
 import unittest
-from extract_md import extract_markdown_images, extract_markdown_links, split_nodes_delimiter, split_nodes_image, split_nodes_link
+from extract_md import extract_markdown_images, extract_markdown_links, \
+    split_nodes_delimiter, split_nodes_image, split_nodes_link, text_to_textnodes, markdown_to_blocks
 from textnode import TextNode, TextType
 
 class TestSplitNodesDelimiter(unittest.TestCase):
@@ -269,6 +270,150 @@ class TestSplitNodesLink(unittest.TestCase):
             ],
             new_nodes,
         )
+
+
+class TestTextToTextNodes(unittest.TestCase):
+    def test_comprehensive(self):
+        text = "This is **text** with an _italic_ word and a `code block` and an ![obi wan image](https://i.imgur.com/fJRm4Vk.jpeg) and a [link](https://boot.dev)"
+        nodes = text_to_textnodes(text)
+        self.assertListEqual(
+            [
+                TextNode("This is ", TextType.TEXT),
+                TextNode("text", TextType.BOLD),
+                TextNode(" with an ", TextType.TEXT),
+                TextNode("italic", TextType.ITALIC),
+                TextNode(" word and a ", TextType.TEXT),
+                TextNode("code block", TextType.CODE),
+                TextNode(" and an ", TextType.TEXT),
+                TextNode("obi wan image", TextType.IMAGE, "https://i.imgur.com/fJRm4Vk.jpeg"),
+                TextNode(" and a ", TextType.TEXT),
+                TextNode("link", TextType.LINK, "https://boot.dev"),
+            ],
+            nodes,
+        )
+
+    def test_just_text(self):
+        text = "This is just a plain text string."
+        nodes = text_to_textnodes(text)
+        self.assertListEqual(
+            [
+                TextNode("This is just a plain text string.", TextType.TEXT),
+            ],
+            nodes,
+        )
+
+    def test_consecutive_formatting(self):
+        text = "**Bold**_Italic_`Code`"
+        nodes = text_to_textnodes(text)
+        self.assertListEqual(
+            [
+                TextNode("Bold", TextType.BOLD),
+                TextNode("Italic", TextType.ITALIC),
+                TextNode("Code", TextType.CODE),
+            ],
+            nodes,
+        )
+
+    def test_formatting_at_edges(self):
+        text = "**Start** and then the _end_"
+        nodes = text_to_textnodes(text)
+        self.assertListEqual(
+            [
+                TextNode("Start", TextType.BOLD),
+                TextNode(" and then the ", TextType.TEXT),
+                TextNode("end", TextType.ITALIC),
+            ],
+            nodes,
+        )
+
+    def test_multiple_of_same_type(self):
+        text = "This **bold** and that **bold**"
+        nodes = text_to_textnodes(text)
+        self.assertListEqual(
+            [
+                TextNode("This ", TextType.TEXT),
+                TextNode("bold", TextType.BOLD),
+                TextNode(" and that ", TextType.TEXT),
+                TextNode("bold", TextType.BOLD),
+            ],
+            nodes,
+        )
+        
+    def test_multiple_links(self):
+        text = "Here is a [link1](url1) and here is [link2](url2)"
+        nodes = text_to_textnodes(text)
+        self.assertListEqual(
+            [
+                TextNode("Here is a ", TextType.TEXT),
+                TextNode("link1", TextType.LINK, "url1"),
+                TextNode(" and here is ", TextType.TEXT),
+                TextNode("link2", TextType.LINK, "url2"),
+            ],
+            nodes,
+        )
+
+    def test_image_and_link_together(self):
+        text = "![image](img.png)[link](site.com)"
+        nodes = text_to_textnodes(text)
+        self.assertListEqual(
+            [
+                TextNode("image", TextType.IMAGE, "img.png"),
+                TextNode("link", TextType.LINK, "site.com"),
+            ],
+            nodes,
+        )
+
+
+class TestMarkdownToBlocks(unittest.TestCase):
+    def test_single_block(self):
+        markdown = "This is one paragraph."
+        expected = ["This is one paragraph."]
+        self.assertEqual(markdown_to_blocks(markdown), expected)
+
+    def test_two_blocks(self):
+        markdown = "First paragraph.\n\nSecond paragraph."
+        expected = ["First paragraph.", "Second paragraph."]
+        self.assertEqual(markdown_to_blocks(markdown), expected)
+
+    def test_blocks_are_stripped(self):
+        markdown = "   First paragraph with spaces.   \n\n\tSecond paragraph with tabs.\t"
+        expected = ["First paragraph with spaces.", "Second paragraph with tabs."]
+        self.assertEqual(markdown_to_blocks(markdown), expected)
+
+    def test_multiple_blank_lines(self):
+        markdown = "First paragraph.\n\n\n\nSecond paragraph."
+        expected = ["First paragraph.", "Second paragraph."]
+        self.assertEqual(markdown_to_blocks(markdown), expected)
+
+    def test_blank_only_input(self):
+        markdown = "   \n   \n\t"
+        expected = []
+        self.assertEqual(markdown_to_blocks(markdown), expected)
+
+    def test_empty_string(self):
+        markdown = ""
+        expected = []
+        self.assertEqual(markdown_to_blocks(markdown), expected)
+
+    def test_blank_lines_with_spaces(self):
+        markdown = "First paragraph.\n  \n\t\nSecond paragraph."
+        expected = ["First paragraph.", "Second paragraph."]
+        self.assertEqual(markdown_to_blocks(markdown), expected)
+
+    def test_multiline_paragraphs(self):
+        markdown = """This is **bolded** paragraph
+
+This is another paragraph with _italic_ text and `code` here
+This is the same paragraph on a new line
+
+- This is a list
+- with items"""
+        expected = [
+            "This is **bolded** paragraph",
+            "This is another paragraph with _italic_ text and `code` here\nThis is the same paragraph on a new line",
+            "- This is a list\n- with items",
+        ]
+        self.assertEqual(markdown_to_blocks(markdown), expected)
 
 if __name__ == "__main__":
     unittest.main()

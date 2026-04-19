@@ -88,3 +88,29 @@ def split_nodes_link(old_nodes: list[TextNode]) -> list[TextNode]:
         if original_text != "":
             nodes.append(TextNode(original_text, TextType.TEXT))
     return nodes
+
+def text_to_textnodes(text: str) -> list[TextNode]:
+    # Start with a single TextNode containing the raw text
+    nodes = [TextNode(text, TextType.TEXT)]
+    
+    # Process images first (usually best to do images before links, 
+    # since images look like links but start with an exclamation mark)
+    nodes = split_nodes_image(nodes)
+    
+    # Process links
+    nodes = split_nodes_link(nodes)
+    
+    # Process bold (must be processed before italic since ** contains _)
+    nodes = split_nodes_delimiter(nodes, "**", TextType.BOLD)
+    
+    # Process italic
+    nodes = split_nodes_delimiter(nodes, "_", TextType.ITALIC)
+    
+    # Process code blocks
+    nodes = split_nodes_delimiter(nodes, "`", TextType.CODE)
+    
+    return nodes    
+
+def markdown_to_blocks(markdown: str) -> list[str]:
+    blocks = re.split(r"\n\s*\n", markdown)
+    return [block.strip() for block in blocks if block.strip()]
