@@ -1,8 +1,10 @@
 import os
 import shutil
 from extract_md import generate_page_recursive
+import sys
 
-def clear_directory(path):
+
+def clear_directory(path: str):
     if not os.path.exists(path):
         os.mkdir(path)
         return
@@ -31,17 +33,28 @@ def copy_recursive(src, dst):
 
 
 def main():
-    static_path = "static"
-    public_path = "public"
+    args = sys.argv[1:]
+
+    if args:
+        url_basepath = args[0]      # e.g. "/my-repo"
+    else:
+        url_basepath = "/"
+
+    project_root = "."
+
+    static_path = os.path.join(project_root, "static")
+    public_path = os.path.join(project_root, "docs")
 
     clear_directory(public_path)
     copy_recursive(static_path, public_path)
 
     generate_page_recursive(
+        basepath=url_basepath,
         content_path_dir="content",
         template_path="template.html",
-        dest_path_dir=f"{public_path}"
+        dest_path_dir=public_path
     )
+
 
 if __name__ == "__main__":
     main()
