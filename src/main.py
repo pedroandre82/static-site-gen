@@ -36,7 +36,7 @@ def main():
     args = sys.argv[1:]
 
     if args:
-        url_basepath = args[0]      # e.g. "/my-repo"
+        url_basepath = args[0]
     else:
         url_basepath = "/"
 
