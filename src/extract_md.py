@@ -219,8 +219,8 @@ def generate_page(from_path, template_path, dest_path, basepath):
 
     full_page = template.replace("{{ Title }}", title).replace("{{ Content }}", content_html)
 
-    full_page = full_page.replace('href="/', f'href="{url_join(basepath, "")}/')
-    full_page = full_page.replace('src="/', f'src="{url_join(basepath, "")}/')
+    full_page = full_page.replace('href="/', f'href="{url_join(basepath, "")}')
+    full_page = full_page.replace('src="/', f'src="{url_join(basepath, "")}')
 
     dest_dir = os.path.dirname(dest_path)
     if dest_dir != "":
