@@ -415,5 +415,35 @@ This is the same paragraph on a new line
         ]
         self.assertEqual(markdown_to_blocks(markdown), expected)
 
+from extract_md import extract_title
+
+class TestExtractTitle(unittest.TestCase):
+    def test_extract_title_basic(self):
+        markdown = "# My Page Title"
+        self.assertEqual(extract_title(markdown), "My Page Title")
+
+    def test_extract_title_with_body_content(self):
+        markdown = "# My Page Title\n\nThis is a paragraph below the title."
+        self.assertEqual(extract_title(markdown), "My Page Title")
+
+    def test_extract_title_raises_when_no_h1_title(self):
+        markdown = "## Not the main title"
+        with self.assertRaises(ValueError):
+            extract_title(markdown)
+
+    def test_extract_title_raises_when_empty_string(self):
+        markdown = ""
+        with self.assertRaises(ValueError):
+            extract_title(markdown)
+
+    def test_extract_title_when_tags_come_first(self):
+        markdown = "#tag1 #tag2\n# Title"
+        self.assertEqual(extract_title(markdown), "Title")
+
+    def test_extract_title_when_comment_comes_first(self):
+        markdown = "comment\n# Title"
+        self.assertEqual(extract_title(markdown), "Title")
+    
+
 if __name__ == "__main__":
     unittest.main()

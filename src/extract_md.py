@@ -1,7 +1,25 @@
 import re
 from textnode import TextNode, TextType
+from enum import Enum
+from htmlnode import HTMLNode, LeafNode, ParentNode
+import os
 
-def split_nodes_delimiter(old_nodes, delimiter, text_type):
+class BlockType(Enum):
+    PARAGRAPH = 1
+    HEADING = 2
+    CODE = 3
+    QUOTE = 4
+    UNORDERED_LIST = 5
+    ORDERED_LIST = 6
+
+
+def split_nodes_delimiter(old_nodes, delimiter, text_type) -> list[TextNode]:
+    """
+    Splits a list of TextNodes based on a delimiter, and returns a new list of TextNodes.
+    """
+    if not old_nodes:
+        return []
+    
     new_nodes = []
 
     for node in old_nodes:
@@ -24,22 +42,17 @@ def split_nodes_delimiter(old_nodes, delimiter, text_type):
 
     return new_nodes
 
-# images
-IMG_PATTERN = r"!\[([^\[\]]*)\]\(([^\(\)]*)\)"
-
-# regular links
-# LINK_PATTERN = r"(?<!!)\[([^\[\]]*)\]\(([^\(\)]*)\)"
-LINK_PATTERN = r"(?<!!)\[([^\[\]]+)\]\(([^()\s]+(?:\([^()\s]+\))?[^()\s]*)\)"
-
 def extract_markdown_images(text) -> list[tuple[str, str]]:
-    return re.findall(IMG_PATTERN, text)
+    return re.findall(r"!\[([^\[\]]*)\]\(([^\(\)]*)\)", text)
 
 def extract_markdown_links(text) -> list[tuple[str, str]]:
-    # The (?<!!) is a negative lookbehind
-    matches = re.findall(LINK_PATTERN, text)
+    matches = re.findall(r"(?<!!)\[([^\[\]]+)\]\(([^()\s]+(?:\([^()\s]+\))?[^()\s]*)\)", text)
     return matches
 
 def split_nodes_image(old_nodes: list[TextNode]) -> list[TextNode]:
+    """
+    Splits a list of TextNodes based on images, and returns a new list of TextNodes.
+    """
     if not old_nodes:
         return []
     nodes = []
@@ -114,3 +127,108 @@ def text_to_textnodes(text: str) -> list[TextNode]:
 def markdown_to_blocks(markdown: str) -> list[str]:
     blocks = re.split(r"\n\s*\n", markdown)
     return [block.strip() for block in blocks if block.strip()]
+
+
+def block_to_block_type(block: str) -> BlockType:
+    if re.match(r"^#{1,6} .+", block):
+        return BlockType.HEADING
+
+    if re.match(r"^```[\w]*\n[\s\S]*\n```$", block):
+        return BlockType.CODE
+
+    lines = block.split("\n")
+
+    if all(line.startswith(">") for line in lines):
+        return BlockType.QUOTE
+
+    if all(line.startswith("- ") for line in lines):
+        return BlockType.UNORDERED_LIST
+
+    if all(re.match(r"^\d+\. ", line) for line in lines):
+        return BlockType.ORDERED_LIST
+
+    return BlockType.PARAGRAPH
+
+
+def markdown_to_html_node(markdown: str) -> HTMLNode:
+    blocks = markdown_to_blocks(markdown)
+    nodes = []
+    for block in blocks:
+        block_type = block_to_block_type(block)
+        if block_type == BlockType.PARAGRAPH:
+            block = block.replace("\n", " ")
+            html_nodes = [text_node.to_html_node() for text_node in text_to_textnodes(block)]
+            nodes.append(ParentNode("p", html_nodes))
+        
+        elif block_type == BlockType.HEADING:
+            header, text = block.split(" ", 1)
+            level = len(header)
+            html_nodes = [text_node.to_html_node() for text_node in text_to_textnodes(text)]
+            nodes.append(ParentNode(f"h{level}", html_nodes))
+        
+        elif block_type == BlockType.CODE:
+            language = re.findall(r"```([\w]*)", block)[0]
+            block = block.replace(f"```{language}\n", "")
+            block = block.replace("\n```", "")
+            nodes.append(ParentNode("pre", [LeafNode("code", block)]))
+
+        elif block_type == BlockType.QUOTE:
+            lines = block.split("\n")
+            cleaned_lines = [line.removeprefix("> ").removeprefix(">") for line in lines]
+            quote_text = "\n".join(cleaned_lines)
+            html_nodes = [text_node.to_html_node() for text_node in text_to_textnodes(quote_text)]
+            nodes.append(ParentNode("blockquote", html_nodes))
+        
+        elif block_type == BlockType.UNORDERED_LIST:
+            lines = block.split("\n")
+            list_items = [line.removeprefix("- ") for line in lines if line.startswith("- ")]
+            html_nodes = [ParentNode("li", [text_node.to_html_node() for text_node in text_to_textnodes(line)]) for line in list_items]
+            nodes.append(ParentNode("ul", html_nodes))
+            
+        elif block_type == BlockType.ORDERED_LIST:
+            lines = block.split("\n")
+            list_items = [line[3:] for line in lines if re.match(r"^\d+\. ", line)]
+            html_nodes = [ParentNode("li", [text_node.to_html_node() for text_node in text_to_textnodes(line)]) for line in list_items]
+            nodes.append(ParentNode("ol", html_nodes))
+
+    return ParentNode("div", nodes)
+
+
+def extract_title(markdown: str) -> str:
+    matches = re.findall(r"^# (.+)", markdown, re.MULTILINE)
+    if not matches:
+        raise ValueError("No title found in markdown")
+    return matches[0]
+
+
+def generate_page(from_path, template_path, dest_path):
+    print(f"Generating page from {from_path} to {dest_path} using {template_path}")
+
+    with open(from_path, "r") as f:
+        markdown = f.read()
+
+    with open(template_path, "r") as f:
+        template = f.read()
+
+    content_html = markdown_to_html_node(markdown).to_html()
+    title = extract_title(markdown)
+
+    full_page = template.replace("{{ Title }}", title).replace("{{ Content }}", content_html)
+
+    dest_dir = os.path.dirname(dest_path)
+    if dest_dir != "":
+        os.makedirs(dest_dir, exist_ok=True)
+
+    with open(dest_path, "w") as f:
+        f.write(full_page)
+
+
+def generate_page_recursive(content_path_dir, template_path, dest_path_dir):
+    for entry in os.listdir(content_path_dir):        
+        src_path = os.path.join(content_path_dir, entry)
+        dest_path = os.path.join(dest_path_dir, entry)
+
+        if os.path.isfile(src_path) and src_path.endswith(".md"):
+            generate_page(src_path, template_path, dest_path.removesuffix(".md") + ".html")
+        else:
+            generate_page_recursive(src_path, template_path, dest_path)

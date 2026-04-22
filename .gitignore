@@ -51,3 +51,6 @@ coverage.xml
 *.swp
 *.swo
 .DS_Store
+
+# --- Project specific
+public/
